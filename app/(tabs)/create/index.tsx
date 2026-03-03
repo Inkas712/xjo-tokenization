@@ -23,9 +23,11 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import Colors from '@/constants/colors';
 import { categories, AssetCategory } from '@/mocks/assets';
-import { useMintAsset } from '@/hooks/useAssets';
+import { useMintAsset, useMintFee } from '@/hooks/useAssets';
 import { useWallet } from '@/contexts/WalletContext';
 import { mixpanel } from '@/services/mixpanel';
+import { ASSET_TOKEN_ADDRESS } from '@/constants/contracts';
+import { formatEther } from '@/services/blockchain';
 
 type Step = 1 | 2 | 3;
 
@@ -44,8 +46,9 @@ export default function CreateScreen() {
   const insets = useSafeAreaInsets();
   const { isConnected, address, fullAddress, showToast } = useWallet();
   const mintAsset = useMintAsset();
+  const mintFeeQuery = useMintFee();
   const [step, setStep] = useState<Step>(1);
-  const [mintResult, setMintResult] = useState<{ txHash: string; tokenId: string; ipfsHash?: string } | null>(null);
+  const [mintResult, setMintResult] = useState<{ txHash: string; tokenId: string; ipfsHash?: string; contractAddress?: string; blockchain?: string } | null>(null);
   const [form, setForm] = useState<FormData>({
     image: '',
     name: '',
@@ -138,6 +141,8 @@ export default function CreateScreen() {
         txHash: result.txHash,
         tokenId: result.tokenId,
         ipfsHash: result.ipfsHash,
+        contractAddress: result.contractAddress,
+        blockchain: result.blockchain,
       });
       console.log('[Create] Mint successful:', result);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -342,8 +347,10 @@ export default function CreateScreen() {
                 ['Sale Type', form.saleType === 'fixed' ? 'Fixed Price' : 'Auction'],
                 ['Royalty', `${form.royalty}%`],
                 ['Supply', form.supply || '1'],
-                ['Blockchain', 'Ethereum'],
-                ['Token Standard', parseInt(form.supply) > 1 ? 'ERC-1155' : 'ERC-721'],
+                ['Blockchain', 'Polygon Amoy'],
+                ['Token Standard', 'ERC-721'],
+                ['Contract', `${ASSET_TOKEN_ADDRESS.slice(0, 8)}...${ASSET_TOKEN_ADDRESS.slice(-6)}`],
+                ['Mint Fee', mintFeeQuery.data ? `${formatEther(mintFeeQuery.data)} POL` : 'Loading...'],
               ].map(([label, value]) => (
                 <View key={label} style={styles.previewRow}>
                   <Text style={styles.previewLabel}>{label}</Text>
@@ -362,7 +369,7 @@ export default function CreateScreen() {
               <Sparkles size={48} color={Colors.accent} />
             </View>
             <Text style={styles.mintingTitle}>Minting Your Token...</Text>
-            <Text style={styles.mintingSubtext}>Uploading to IPFS & broadcasting to Ethereum</Text>
+            <Text style={styles.mintingSubtext}>Uploading to IPFS & broadcasting to Polygon Amoy</Text>
             <ActivityIndicator size="large" color={Colors.accent} style={{ marginTop: 20 }} />
           </View>
         )}
@@ -386,6 +393,18 @@ export default function CreateScreen() {
               <View style={styles.txCard}>
                 <Text style={styles.txLabel}>IPFS Hash</Text>
                 <Text style={styles.txHash}>{mintResult.ipfsHash.slice(0, 12)}...</Text>
+              </View>
+            )}
+            {mintResult.contractAddress && (
+              <View style={styles.txCard}>
+                <Text style={styles.txLabel}>Contract</Text>
+                <Text style={styles.txHash}>{mintResult.contractAddress.slice(0, 10)}...{mintResult.contractAddress.slice(-6)}</Text>
+              </View>
+            )}
+            {mintResult.blockchain && (
+              <View style={styles.txCard}>
+                <Text style={styles.txLabel}>Network</Text>
+                <Text style={styles.txHash}>{mintResult.blockchain}</Text>
               </View>
             )}
             <TouchableOpacity style={styles.newTokenBtn} onPress={resetForm}>

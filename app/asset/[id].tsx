@@ -39,10 +39,11 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { assets } from '@/mocks/assets';
 import { PriceChart } from '@/components/PriceChart';
-import { useAssetQuery, usePlaceBid, usePurchaseAsset } from '@/hooks/useAssets';
+import { useAssetQuery, usePlaceBid, usePurchaseAsset, useListAsset } from '@/hooks/useAssets';
 import { AuctionTimer } from '@/components/AuctionTimer';
 import { useWallet } from '@/contexts/WalletContext';
 import { mixpanel } from '@/services/mixpanel';
+import { ASSET_TOKEN_ADDRESS } from '@/constants/contracts';
 import {
   generateComments,
   generateResaleHistory,
@@ -63,6 +64,7 @@ export default function AssetDetailScreen() {
   const assetQuery = useAssetQuery(id ?? '');
   const placeBidMutation = usePlaceBid();
   const purchaseMutation = usePurchaseAsset();
+
   const asset = assetQuery.data ?? assets.find(a => a.id === id) ?? null;
 
   const [showBuyModal, setShowBuyModal] = useState<boolean>(false);
@@ -345,8 +347,9 @@ export default function AssetDetailScreen() {
           <View style={styles.detailsCard}>
             {[
               ['Token ID', `#${asset.tokenId}`],
-              ['Contract', `${asset.contractAddress.slice(0, 8)}...${asset.contractAddress.slice(-6)}`],
-              ['Blockchain', asset.blockchain],
+              ['Contract', `${ASSET_TOKEN_ADDRESS.slice(0, 8)}...${ASSET_TOKEN_ADDRESS.slice(-6)}`],
+              ['Blockchain', 'Polygon Amoy'],
+              ['Network', 'Chain ID: 80002'],
               ['Token Standard', asset.tokenStandard],
               ['Royalty', `${asset.royalty}%`],
               ['Supply', asset.supply.toLocaleString()],
