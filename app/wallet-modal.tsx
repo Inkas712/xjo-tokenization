@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { X, Wallet, LogOut, ChevronRight, Shield, Zap, Globe, RefreshCw, CheckCircle, XCircle, AlertCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
-import { useWallet, WalletType } from '@/contexts/WalletContext';
+import { useWallet, WalletType, WALLETCONNECT_METADATA } from '@/contexts/WalletContext';
 
 const walletOptions: { type: WalletType; name: string; color: string; icon: string }[] = [
   { type: 'MetaMask', name: 'MetaMask', color: '#F6851B', icon: '🦊' },
@@ -180,7 +180,7 @@ export default function WalletModal() {
       ) : (
         <View style={styles.optionsContent}>
           <Text style={styles.optionsSubtitle}>
-            Choose your preferred wallet to connect to AssetVault
+            Choose your preferred wallet to connect to {WALLETCONNECT_METADATA.name}
           </Text>
 
           {walletOptions.map(wallet => (

@@ -14,6 +14,22 @@ export type WalletType = 'MetaMask' | 'WalletConnect' | 'Coinbase Wallet';
 
 const WALLETCONNECT_PROJECT_ID = process.env.EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
 
+export const WALLETCONNECT_METADATA = {
+  name: 'XJO Tokenization',
+  description: 'Tokenize real-world assets on blockchain',
+  url: 'https://www.xjotoken.online',
+  icons: ['https://www.xjotoken.online/favicon.png'],
+  redirect: {
+    native: 'rork-app://',
+    universal: 'https://www.xjotoken.online',
+  },
+};
+
+export const WALLETCONNECT_ALLOWED_DOMAINS = [
+  'https://www.xjotoken.online',
+  'https://xjo-tokenization.vercel.app',
+];
+
 export interface PriceAlert {
   id: string;
   assetId: string;
