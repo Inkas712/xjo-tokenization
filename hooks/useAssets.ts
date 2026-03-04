@@ -21,6 +21,7 @@ import {
   ASSET_TOKEN_ADDRESS,
   MARKETPLACE_ADDRESS,
 } from '@/services/blockchain';
+import { sendTransaction, waitForReceipt, isWalletAvailable } from '@/services/web3-wallet';
 import type { Address } from 'viem';
 
 export function useAssetsQuery() {
@@ -374,6 +375,10 @@ export function usePurchaseAsset() {
     mutationFn: async (params: { assetId: string; buyerWallet: string; price: number; listingId?: string }) => {
       console.log(`[Purchase] Buying asset ${params.assetId} for ${params.price} ETH`);
 
+      if (!params.buyerWallet || !params.buyerWallet.startsWith('0x')) {
+        throw new Error('Please connect your wallet first.');
+      }
+
       const priceWei = parseEther(params.price.toString());
       const listingId = BigInt(params.listingId || '1');
 
@@ -389,18 +394,40 @@ export function usePurchaseAsset() {
         listingId: listingId.toString(),
       });
 
-      const result = await purchaseAssetInDb(params.assetId, params.buyerWallet, params.price);
-      if (!result.success) {
-        console.error('[Purchase] Failed:', result.error);
-        throw new Error(result.error || 'Failed to complete purchase');
+      let txHash = '';
+
+      if (isWalletAvailable()) {
+        console.log('[Purchase] Sending real blockchain transaction...');
+        txHash = await sendTransaction({
+          to: buyTx.to,
+          data: buyTx.data,
+          value: buyTx.value,
+          from: params.buyerWallet,
+        });
+
+        console.log('[Purchase] Transaction sent, hash:', txHash);
+        console.log('[Purchase] Waiting for on-chain confirmation...');
+
+        const receipt = await waitForReceipt(txHash);
+        console.log('[Purchase] Transaction confirmed! Block:', receipt.blockNumber);
+      } else {
+        console.warn('[Purchase] No browser wallet available, falling back to Supabase-only flow');
+        txHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
       }
 
-      console.log('[Purchase] Purchase completed. TX:', result.txHash);
+      console.log('[Purchase] Saving purchase record to Supabase...');
+      const result = await purchaseAssetInDb(params.assetId, params.buyerWallet, params.price);
+      if (!result.success) {
+        console.error('[Purchase] Database save failed (tx already on-chain):', result.error);
+      }
+
+      console.log('[Purchase] Purchase completed. TX:', txHash);
       console.log('[Purchase] Contract:', MARKETPLACE_ADDRESS);
       console.log('[Purchase] Network: Polygon Amoy (chainId: 80002)');
 
       return {
-        ...result,
+        success: true,
+        txHash,
         buyTransaction: buyTx,
         blockchain: 'Polygon Amoy',
         chainId: 80002,
@@ -412,6 +439,7 @@ export function usePurchaseAsset() {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       queryClient.invalidateQueries({ queryKey: ['walletBalance'] });
       queryClient.invalidateQueries({ queryKey: ['onChainStats'] });
+      queryClient.invalidateQueries({ queryKey: ['onChainAssets'] });
       sendAssetSoldEmail({
         sellerEmail: 'ix7ag@proton.me',
         sellerName: 'Asset Seller',

@@ -57,7 +57,7 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isConnected, toggleFavorite, favorites, toggleWatchlist, watchlist, showToast, addPriceAlert } = useWallet();
+  const { isConnected, fullAddress, toggleFavorite, favorites, toggleWatchlist, watchlist, showToast, addPriceAlert } = useWallet();
 
   const assetQuery = useAssetQuery(id ?? '');
   const placeBidMutation = usePlaceBid();
@@ -70,7 +70,8 @@ export default function AssetDetailScreen() {
   const [showAlertModal, setShowAlertModal] = useState<boolean>(false);
   const [showReviewsModal, setShowReviewsModal] = useState<boolean>(false);
   const [bidAmount, setBidAmount] = useState<string>('');
-  const [buyState, setBuyState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [buyState, setBuyState] = useState<'idle' | 'loading' | 'confirming' | 'success'>('idle');
+  const [purchaseTxHash, setPurchaseTxHash] = useState<string>('');
   const [bidState, setBidState] = useState<'idle' | 'loading' | 'success'>('idle');
   const [activeTab, setActiveTab] = useState<DetailTab>('bids');
   const [newComment, setNewComment] = useState<string>('');
@@ -112,19 +113,26 @@ export default function AssetDetailScreen() {
 
   const confirmBuy = useCallback(async () => {
     if (!asset) return;
+    if (!fullAddress) {
+      Alert.alert('Connect Wallet', 'Please connect your wallet to make a purchase.');
+      return;
+    }
     setBuyState('loading');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      console.log(`[AssetDetail] Purchasing asset ${asset.id} via Supabase...`);
-      await purchaseMutation.mutateAsync({
+      console.log(`[AssetDetail] Purchasing asset ${asset.id} via blockchain...`);
+      setBuyState('confirming');
+      const result = await purchaseMutation.mutateAsync({
         assetId: asset.id,
-        buyerWallet: '0x7a3B4c2D8E1f6A9b5C3d7E2F8a4B6c1D9e5F2E',
+        buyerWallet: fullAddress,
         price: asset.price,
       });
+      const txHash = result?.txHash || '';
+      setPurchaseTxHash(txHash);
       setBuyState('success');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (asset) {
-        mixpanel.trackAssetPurchased(asset.id, asset.price, asset.owner.wallet, '0x7a3B4c2D8E1f6A9b5C3d7E2F8a4B6c1D9e5F2E');
+        mixpanel.trackAssetPurchased(asset.id, asset.price, asset.owner.wallet, fullAddress);
       }
     } catch (err: any) {
       console.error('[AssetDetail] Purchase failed:', err);
@@ -133,7 +141,7 @@ export default function AssetDetailScreen() {
       const errorMsg = err?.message || 'Purchase failed. Please try again.';
       showToast(errorMsg, 'error');
     }
-  }, [asset, purchaseMutation]);
+  }, [asset, purchaseMutation, fullAddress, showToast]);
 
   const handleBid = useCallback(() => {
     if (!isConnected) {
@@ -581,17 +589,26 @@ export default function AssetDetailScreen() {
                 </View>
               </>
             )}
-            {buyState === 'loading' && (
+            {(buyState === 'loading' || buyState === 'confirming') && (
               <View style={styles.modalCenter}>
                 <ActivityIndicator size="large" color={Colors.accent} />
-                <Text style={styles.modalLoadingText}>Processing transaction...</Text>
+                <Text style={styles.modalLoadingText}>
+                  {buyState === 'loading' ? 'Confirm in your wallet...' : 'Waiting for confirmation...'}
+                </Text>
+                <Text style={styles.modalSubText}>
+                  {buyState === 'loading'
+                    ? 'Please approve the transaction in MetaMask'
+                    : 'Transaction submitted, waiting for block confirmation...'}
+                </Text>
               </View>
             )}
             {buyState === 'success' && (
               <View style={styles.modalCenter}>
                 <View style={styles.successCircle}><CheckCircle size={40} color={Colors.accent} /></View>
                 <Text style={styles.modalSuccessTitle}>Purchase Complete!</Text>
-                <Text style={styles.txHash}>0x8f3a...b72e4d91</Text>
+                <Text style={styles.txHash}>
+                  {purchaseTxHash ? `${purchaseTxHash.slice(0, 10)}...${purchaseTxHash.slice(-8)}` : 'Confirmed'}
+                </Text>
                 <TouchableOpacity style={styles.modalDoneBtn} onPress={() => { setShowBuyModal(false); setBuyState('idle'); }}>
                   <Text style={styles.modalDoneText}>Done</Text>
                 </TouchableOpacity>

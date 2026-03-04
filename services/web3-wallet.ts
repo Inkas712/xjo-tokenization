@@ -185,6 +185,74 @@ export function onChainChanged(callback: (chainId: number) => void): () => void 
   return () => provider.removeListener('chainChanged', handler);
 }
 
+export async function sendTransaction(params: {
+  to: string;
+  data: string;
+  value: bigint;
+  from: string;
+}): Promise<string> {
+  const provider = getEthereumProvider();
+  if (!provider) {
+    throw new Error('No wallet detected. Please install MetaMask or another Web3 wallet.');
+  }
+
+  console.log('[Web3Wallet] Sending transaction...', {
+    to: params.to,
+    from: params.from,
+    value: params.value.toString(),
+  });
+
+  const txHash = await provider.request({
+    method: 'eth_sendTransaction',
+    params: [{
+      from: params.from,
+      to: params.to,
+      data: params.data,
+      value: `0x${params.value.toString(16)}`,
+    }],
+  }) as string;
+
+  console.log('[Web3Wallet] Transaction sent:', txHash);
+  return txHash;
+}
+
+export async function waitForReceipt(txHash: string): Promise<{ status: string; blockNumber: string }> {
+  const provider = getEthereumProvider();
+  if (!provider) {
+    throw new Error('No wallet provider available');
+  }
+
+  console.log('[Web3Wallet] Waiting for receipt:', txHash);
+
+  let receipt = null;
+  let attempts = 0;
+  const maxAttempts = 60;
+
+  while (!receipt && attempts < maxAttempts) {
+    receipt = await provider.request({
+      method: 'eth_getTransactionReceipt',
+      params: [txHash],
+    }) as { status: string; blockNumber: string } | null;
+
+    if (!receipt) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      attempts++;
+    }
+  }
+
+  if (!receipt) {
+    throw new Error('Transaction confirmation timed out. Check your wallet for status.');
+  }
+
+  const status = receipt.status;
+  if (status === '0x0') {
+    throw new Error('Transaction reverted on-chain. Please check the listing and try again.');
+  }
+
+  console.log('[Web3Wallet] Transaction confirmed in block:', receipt.blockNumber);
+  return receipt;
+}
+
 export async function disconnectBrowserWallet(): Promise<void> {
   console.log('[Web3Wallet] Disconnected (client-side only)');
 }
