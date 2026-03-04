@@ -6,7 +6,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useQuery } from '@tanstack/react-query';
 import { notifications as mockNotifications, Notification } from '@/mocks/notifications';
 import { Currency, Language, exchangeRates, currencySymbols } from '@/mocks/premium';
-import { getEthBalance, getEthPrice, testAlchemyConnection, AlchemyConnectionTest } from '@/services/alchemy';
+import { getEthPrice, testAlchemyConnection, AlchemyConnectionTest } from '@/services/alchemy';
 import { testSupabaseConnection, SupabaseConnectionTest } from '@/services/supabase';
 import { testPinataConnection, PinataConnectionTest } from '@/services/pinata';
 import {
@@ -319,73 +319,52 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
     setIsConnecting(true);
 
     try {
-      if (isOnWeb() && isWalletAvailable()) {
-        console.log('[Wallet] Using real browser wallet connection');
-
-        const result = await connectBrowserWallet();
-        const addr = result.address;
-
-        setIsConnected(true);
-        setWalletType(type);
-        setFullAddress(addr);
-        setChainId(result.chainId);
-
-        Sentry.setUser({ id: addr });
-        Sentry.addBreadcrumb({
-          category: 'wallet',
-          message: 'wallet_connected',
-          data: { walletType: type, address: addr, chainId: result.chainId },
-          level: 'info',
-        });
-
-        mixpanel.identify(addr);
-        mixpanel.setProfile({
-          wallet_address: addr,
-          platform: 'web',
-          wallet_type: type,
-        });
-        mixpanel.trackWalletConnected(addr);
-
-        const balanceResult = await getBalance(addr);
-        setBalance(balanceResult.balanceFormatted);
-        console.log(`[Wallet] Real balance: ${balanceResult.balanceFormatted} MATIC`);
-
-        if (result.chainId !== 80002 && result.chainId !== 137) {
-          console.log('[Wallet] Not on Polygon, attempting switch...');
-          try {
-            await switchToPolygonAmoy();
-          } catch (switchErr) {
-            console.warn('[Wallet] Could not auto-switch network:', switchErr);
-          }
+      if (!isWalletAvailable()) {
+        const msg = 'No wallet detected. Please install MetaMask (metamask.io) to connect your wallet.';
+        console.warn('[Wallet]', msg);
+        setConnectionError(msg);
+        if (typeof window !== 'undefined') {
+          alert(msg);
         }
-      } else {
-        console.log('[Wallet] No browser wallet available, using demo mode');
-        const mockAddress = '0x7a3B4c2D8E1f6A9b5C3d7E2F8a4B6c1D9e5F2E';
-        setIsConnected(true);
-        setWalletType(type);
-        setFullAddress(mockAddress);
+        return;
+      }
 
-        Sentry.setUser({ id: mockAddress });
-        Sentry.addBreadcrumb({
-          category: 'wallet',
-          message: 'wallet_connected_demo',
-          data: { walletType: type, address: mockAddress },
-          level: 'info',
-        });
+      console.log('[Wallet] Using real browser wallet connection');
 
-        mixpanel.identify(mockAddress);
-        mixpanel.setProfile({
-          wallet_address: mockAddress,
-          platform: Platform.OS,
-          wallet_type: type,
-        });
-        mixpanel.trackWalletConnected(mockAddress);
+      const result = await connectBrowserWallet();
+      const addr = result.address;
 
-        const balanceResult = await getEthBalance(mockAddress);
-        if (balanceResult) {
-          setBalance(balanceResult.balanceEth.toString());
-        } else {
-          setBalance('0.0000');
+      setIsConnected(true);
+      setWalletType(type);
+      setFullAddress(addr);
+      setChainId(result.chainId);
+
+      Sentry.setUser({ id: addr });
+      Sentry.addBreadcrumb({
+        category: 'wallet',
+        message: 'wallet_connected',
+        data: { walletType: type, address: addr, chainId: result.chainId },
+        level: 'info',
+      });
+
+      mixpanel.identify(addr);
+      mixpanel.setProfile({
+        wallet_address: addr,
+        platform: Platform.OS,
+        wallet_type: type,
+      });
+      mixpanel.trackWalletConnected(addr);
+
+      const balanceResult = await getBalance(addr);
+      setBalance(balanceResult.balanceFormatted);
+      console.log(`[Wallet] Real balance: ${balanceResult.balanceFormatted} MATIC`);
+
+      if (result.chainId !== 80002 && result.chainId !== 137) {
+        console.log('[Wallet] Not on Polygon, attempting switch...');
+        try {
+          await switchToPolygonAmoy();
+        } catch (switchErr) {
+          console.warn('[Wallet] Could not auto-switch network:', switchErr);
         }
       }
     } catch (err: unknown) {
