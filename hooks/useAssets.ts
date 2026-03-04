@@ -128,7 +128,7 @@ export function useMintAsset() {
       supply: number;
       ownerWallet: string;
     }) => {
-      console.log('[Mint] Starting mint process with on-chain integration...');
+      console.log('[Mint] Starting mint process with real blockchain transactions...');
 
       console.log('[Mint] Step 1: Uploading image to IPFS...');
       let imageIpfsUrl = params.imageUri;
@@ -198,10 +198,63 @@ export function useMintAsset() {
         dataLength: mintTx.data.length,
       });
 
-      const simulatedTxHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-      const simulatedTokenId = (await getTotalMinted().catch(() => BigInt(0))) + BigInt(1);
+      let mintTxHash = '';
+      let tokenId = '';
 
-      console.log('[Mint] Step 4: Recording asset in Supabase database...');
+      if (isWalletAvailable()) {
+        console.log('[Mint] Sending real mint transaction via wallet...');
+        mintTxHash = await sendTransaction({
+          to: mintTx.to,
+          data: mintTx.data,
+          value: mintTx.value,
+          from: params.ownerWallet,
+        });
+        console.log('[Mint] Mint TX sent:', mintTxHash);
+
+        console.log('[Mint] Waiting for mint confirmation...');
+        const mintReceipt = await waitForReceipt(mintTxHash);
+        console.log('[Mint] Mint confirmed in block:', mintReceipt.blockNumber);
+
+        const totalMinted = await getTotalMinted().catch(() => BigInt(0));
+        tokenId = totalMinted.toString();
+        console.log('[Mint] Minted token ID:', tokenId);
+
+        const priceWei = parseEther(params.price.toString());
+
+        console.log('[Mint] Step 4: Approving Marketplace to transfer token...');
+        const approveTx = encodeApproveTransaction(BigInt(tokenId), MARKETPLACE_ADDRESS);
+        const approveTxHash = await sendTransaction({
+          to: approveTx.to,
+          data: approveTx.data,
+          value: approveTx.value,
+          from: params.ownerWallet,
+        });
+        console.log('[Mint] Approve TX sent:', approveTxHash);
+        const approveReceipt = await waitForReceipt(approveTxHash);
+        console.log('[Mint] Approve confirmed in block:', approveReceipt.blockNumber);
+
+        console.log('[Mint] Step 5: Listing asset on Marketplace...');
+        const listTx = encodeListAssetTransaction({
+          tokenId: BigInt(tokenId),
+          priceWei,
+        });
+        const listTxHash = await sendTransaction({
+          to: listTx.to,
+          data: listTx.data,
+          value: listTx.value,
+          from: params.ownerWallet,
+        });
+        console.log('[Mint] List TX sent:', listTxHash);
+        const listReceipt = await waitForReceipt(listTxHash);
+        console.log('[Mint] Listing confirmed in block:', listReceipt.blockNumber);
+      } else {
+        console.warn('[Mint] No browser wallet available, using simulated flow');
+        mintTxHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+        const totalMinted = await getTotalMinted().catch(() => BigInt(0));
+        tokenId = (totalMinted + BigInt(1)).toString();
+      }
+
+      console.log('[Mint] Step 6: Recording asset in Supabase database...');
       const dbResult = await createAssetInDb({
         name: params.name,
         description: params.description,
@@ -212,7 +265,7 @@ export function useMintAsset() {
         royalty: params.royalty,
         supply: params.supply,
         ownerWallet: params.ownerWallet,
-        tokenId: simulatedTokenId.toString(),
+        tokenId,
         contractAddress: ASSET_TOKEN_ADDRESS,
         blockchain: 'Polygon' as Blockchain,
         ipfsHash: metadataIpfsHash,
@@ -224,17 +277,17 @@ export function useMintAsset() {
       }
 
       console.log('[Mint] Asset created successfully! DB ID:', dbResult.id);
-      console.log('[Mint] On-chain TX (pending wallet signature):', simulatedTxHash);
+      console.log('[Mint] On-chain TX:', mintTxHash);
       console.log('[Mint] Contract:', ASSET_TOKEN_ADDRESS);
       console.log('[Mint] Network: Polygon Amoy (chainId: 80002)');
 
       return {
         assetId: dbResult.id,
-        tokenId: simulatedTokenId.toString(),
+        tokenId,
         contractAddress: ASSET_TOKEN_ADDRESS,
         ipfsHash: metadataIpfsHash,
         imageIpfsHash,
-        txHash: simulatedTxHash,
+        txHash: mintTxHash,
         mintTransaction: mintTx,
         blockchain: 'Polygon Amoy',
         chainId: 80002,
@@ -266,34 +319,52 @@ export function useListAsset() {
       const tokenIdBigInt = BigInt(params.tokenId);
       const priceWei = parseEther(params.priceEth.toString());
 
-      console.log('[List] Step 1: Preparing approval transaction...');
-      const approveTx = encodeApproveTransaction(tokenIdBigInt, MARKETPLACE_ADDRESS);
-      console.log('[List] Approval TX prepared for Marketplace:', MARKETPLACE_ADDRESS);
+      let listTxHash = '';
+      let listingId = '';
 
-      console.log('[List] Step 2: Preparing listAsset transaction...');
-      const listTx = encodeListAssetTransaction({
-        tokenId: tokenIdBigInt,
-        priceWei,
-      });
+      if (isWalletAvailable()) {
+        console.log('[List] Step 1: Sending approval transaction via wallet...');
+        const approveTx = encodeApproveTransaction(tokenIdBigInt, MARKETPLACE_ADDRESS);
+        const approveTxHash = await sendTransaction({
+          to: approveTx.to,
+          data: approveTx.data,
+          value: approveTx.value,
+          from: params.ownerWallet,
+        });
+        console.log('[List] Approve TX sent:', approveTxHash);
+        const approveReceipt = await waitForReceipt(approveTxHash);
+        console.log('[List] Approve confirmed in block:', approveReceipt.blockNumber);
 
-      console.log('[List] List TX prepared:', {
-        to: listTx.to,
-        tokenId: params.tokenId,
-        price: params.priceEth,
-      });
+        console.log('[List] Step 2: Sending listAsset transaction via wallet...');
+        const listTx = encodeListAssetTransaction({
+          tokenId: tokenIdBigInt,
+          priceWei,
+        });
+        listTxHash = await sendTransaction({
+          to: listTx.to,
+          data: listTx.data,
+          value: listTx.value,
+          from: params.ownerWallet,
+        });
+        console.log('[List] List TX sent:', listTxHash);
+        const listReceipt = await waitForReceipt(listTxHash);
+        console.log('[List] Listing confirmed in block:', listReceipt.blockNumber);
 
-      const simulatedTxHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-      const simulatedListingId = (await getTotalListings().catch(() => BigInt(0))) + BigInt(1);
+        const totalListings = await getTotalListings().catch(() => BigInt(0));
+        listingId = totalListings.toString();
+      } else {
+        console.warn('[List] No browser wallet available, using simulated flow');
+        listTxHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+        listingId = ((await getTotalListings().catch(() => BigInt(0))) + BigInt(1)).toString();
+      }
 
-      console.log('[List] Asset listed! ListingId:', simulatedListingId.toString());
+      console.log('[List] Asset listed! ListingId:', listingId);
       console.log('[List] Contract:', MARKETPLACE_ADDRESS);
       console.log('[List] Network: Polygon Amoy (chainId: 80002)');
 
       return {
-        listingId: simulatedListingId.toString(),
-        txHash: simulatedTxHash,
-        approveTransaction: approveTx,
-        listTransaction: listTx,
+        listingId,
+        txHash: listTxHash,
         blockchain: 'Polygon Amoy',
         chainId: 80002,
       };
