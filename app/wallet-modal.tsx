@@ -6,27 +6,35 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, Wallet, LogOut, ChevronRight, Shield, Zap, Globe, RefreshCw, CheckCircle, XCircle, AlertCircle } from 'lucide-react-native';
+import { X, Wallet, LogOut, ChevronRight, Shield, Zap, Globe, RefreshCw, CheckCircle, XCircle, AlertCircle, ExternalLink, Copy } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useWallet, WalletType, WALLETCONNECT_METADATA } from '@/contexts/WalletContext';
 
-const walletOptions: { type: WalletType; name: string; color: string; icon: string }[] = [
-  { type: 'MetaMask', name: 'MetaMask', color: '#F6851B', icon: '🦊' },
-  { type: 'WalletConnect', name: 'WalletConnect', color: '#3B99FC', icon: '🔗' },
-  { type: 'Coinbase Wallet', name: 'Coinbase Wallet', color: '#0052FF', icon: '🔵' },
-];
+const NETWORK_NAMES: Record<number, string> = {
+  1: 'Ethereum Mainnet',
+  137: 'Polygon',
+  80002: 'Polygon Amoy',
+  56: 'BNB Chain',
+  42161: 'Arbitrum',
+  10: 'Optimism',
+};
 
 export default function WalletModal() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const {
-    isConnected, walletType, address, balance, connectWallet, disconnectWallet,
-    walletConnectProjectId, ethUsdPrice, connectionStatus, testConnections,
+    isConnected, walletType, address, fullAddress, balance, connectWallet, disconnectWallet,
+    ethUsdPrice, connectionStatus, testConnections,
+    isConnecting, connectionError, hasInjectedWallet, detectedWalletName, chainId,
   } = useWallet();
+
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
     if (isConnected && !connectionStatus.lastTested) {
@@ -37,9 +45,6 @@ export default function WalletModal() {
   const handleConnect = useCallback((type: WalletType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     connectWallet(type);
-    setTimeout(() => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 300);
   }, [connectWallet]);
 
   const handleDisconnect = useCallback(() => {
@@ -52,6 +57,22 @@ export default function WalletModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     testConnections();
   }, [testConnections]);
+
+  const handleCopyAddress = useCallback(() => {
+    if (!fullAddress) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(fullAddress);
+    }
+  }, [fullAddress]);
+
+  const handleViewExplorer = useCallback(() => {
+    if (!fullAddress) return;
+    const explorerUrl = chainId === 137
+      ? `https://polygonscan.com/address/${fullAddress}`
+      : `https://www.oklink.com/amoy/address/${fullAddress}`;
+    Linking.openURL(explorerUrl);
+  }, [fullAddress, chainId]);
 
   const getStatusIcon = (connected: boolean | null | undefined) => {
     if (connected === null || connected === undefined) {
@@ -66,6 +87,25 @@ export default function WalletModal() {
     if (connected === null || connected === undefined) return Colors.textTertiary;
     return connected ? '#22C55E' : '#EF4444';
   };
+
+  const networkName = chainId ? (NETWORK_NAMES[chainId] ?? `Chain ${chainId}`) : 'Unknown';
+
+  const walletOptions: { type: WalletType; name: string; color: string; icon: string; available: boolean; subtitle: string }[] = isWeb && hasInjectedWallet
+    ? [
+        {
+          type: (detectedWalletName as WalletType) ?? 'MetaMask',
+          name: detectedWalletName ?? 'Browser Wallet',
+          color: '#F6851B',
+          icon: '🦊',
+          available: true,
+          subtitle: 'Detected in browser',
+        },
+      ]
+    : [
+        { type: 'MetaMask', name: 'MetaMask', color: '#F6851B', icon: '🦊', available: !isWeb, subtitle: isWeb ? 'Install MetaMask extension' : 'Demo mode' },
+        { type: 'WalletConnect', name: 'WalletConnect', color: '#3B99FC', icon: '🔗', available: !isWeb, subtitle: 'Demo mode' },
+        { type: 'Coinbase Wallet', name: 'Coinbase Wallet', color: '#0052FF', icon: '🔵', available: !isWeb, subtitle: 'Demo mode' },
+      ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
@@ -84,16 +124,31 @@ export default function WalletModal() {
             </View>
             <Text style={styles.connectedLabel}>Connected with</Text>
             <Text style={styles.connectedType}>{walletType}</Text>
-            <View style={styles.addressBox}>
+
+            {chainId && (
+              <View style={styles.networkBadge}>
+                <View style={[styles.networkDot, { backgroundColor: chainId === 137 || chainId === 80002 ? '#22C55E' : '#F59E0B' }]} />
+                <Text style={styles.networkText}>{networkName}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.addressBox} onPress={handleCopyAddress} activeOpacity={0.7}>
               <Text style={styles.addressText}>{address}</Text>
-            </View>
+              <Copy size={14} color={Colors.textTertiary} />
+            </TouchableOpacity>
+
             <View style={styles.balanceCard}>
               <Text style={styles.balanceLabel}>Balance</Text>
-              <Text style={styles.balanceValue}>{balance} ETH</Text>
+              <Text style={styles.balanceValue}>{balance} MATIC</Text>
               <Text style={styles.balanceUsd}>
-                ${(parseFloat(balance) * ethUsdPrice).toLocaleString()}
+                ${(parseFloat(balance) * ethUsdPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
+
+            <TouchableOpacity style={styles.explorerBtn} onPress={handleViewExplorer}>
+              <ExternalLink size={14} color={Colors.accent} />
+              <Text style={styles.explorerText}>View on Explorer</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.infoCards}>
@@ -178,33 +233,100 @@ export default function WalletModal() {
           </TouchableOpacity>
         </ScrollView>
       ) : (
-        <View style={styles.optionsContent}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
           <Text style={styles.optionsSubtitle}>
-            Choose your preferred wallet to connect to {WALLETCONNECT_METADATA.name}
+            {isWeb && hasInjectedWallet
+              ? `Connect your ${detectedWalletName ?? 'browser wallet'} to ${WALLETCONNECT_METADATA.name}`
+              : isWeb
+                ? 'Install a Web3 wallet like MetaMask to connect'
+                : `Choose your preferred wallet to connect to ${WALLETCONNECT_METADATA.name}`
+            }
           </Text>
+
+          {isWeb && !hasInjectedWallet && (
+            <TouchableOpacity
+              style={styles.installWalletCard}
+              onPress={() => Linking.openURL('https://metamask.io/download/')}
+            >
+              <Text style={styles.installWalletIcon}>🦊</Text>
+              <View style={styles.installWalletInfo}>
+                <Text style={styles.installWalletTitle}>Install MetaMask</Text>
+                <Text style={styles.installWalletSubtitle}>Required for real wallet connection</Text>
+              </View>
+              <ExternalLink size={16} color={Colors.accent} />
+            </TouchableOpacity>
+          )}
+
+          {connectionError && (
+            <View style={styles.errorCard}>
+              <XCircle size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{connectionError}</Text>
+            </View>
+          )}
 
           {walletOptions.map(wallet => (
             <TouchableOpacity
               key={wallet.type}
-              style={styles.walletOption}
+              style={[styles.walletOption, !wallet.available && isWeb && styles.walletOptionDisabled]}
               onPress={() => handleConnect(wallet.type)}
+              disabled={isConnecting}
               testID={`wallet-${wallet.type}`}
             >
               <View style={[styles.walletIcon, { backgroundColor: wallet.color + '15' }]}>
                 <Text style={styles.walletEmoji}>{wallet.icon}</Text>
               </View>
-              <Text style={styles.walletName}>{wallet.name}</Text>
-              <ChevronRight size={18} color={Colors.textTertiary} />
+              <View style={styles.walletInfo}>
+                <Text style={styles.walletName}>{wallet.name}</Text>
+                <Text style={styles.walletSubtitle}>{wallet.subtitle}</Text>
+              </View>
+              {isConnecting ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : (
+                <ChevronRight size={18} color={Colors.textTertiary} />
+              )}
             </TouchableOpacity>
           ))}
+
+          {isWeb && !hasInjectedWallet && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or try demo</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {[
+                { type: 'MetaMask' as WalletType, name: 'MetaMask (Demo)', color: '#F6851B', icon: '🦊' },
+                { type: 'WalletConnect' as WalletType, name: 'WalletConnect (Demo)', color: '#3B99FC', icon: '🔗' },
+              ].map(wallet => (
+                <TouchableOpacity
+                  key={wallet.type}
+                  style={[styles.walletOption, styles.demoOption]}
+                  onPress={() => handleConnect(wallet.type)}
+                  disabled={isConnecting}
+                >
+                  <View style={[styles.walletIcon, { backgroundColor: wallet.color + '10' }]}>
+                    <Text style={styles.walletEmoji}>{wallet.icon}</Text>
+                  </View>
+                  <View style={styles.walletInfo}>
+                    <Text style={[styles.walletName, { color: Colors.textSecondary }]}>{wallet.name}</Text>
+                    <Text style={styles.walletSubtitle}>Simulated connection</Text>
+                  </View>
+                  <ChevronRight size={18} color={Colors.textTertiary} />
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
 
           <View style={styles.securityNote}>
             <Shield size={16} color={Colors.textTertiary} />
             <Text style={styles.securityText}>
-              Your private keys never leave your wallet. We only request view permissions.
+              {isWeb && hasInjectedWallet
+                ? 'Your private keys never leave your wallet. We only request view and transaction permissions.'
+                : 'Your private keys never leave your wallet. We only request view permissions.'}
             </Text>
           </View>
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -270,7 +392,30 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginTop: 2,
   },
+  networkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  networkDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  networkText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
   addressBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: Colors.background,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -304,6 +449,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  explorerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  explorerText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.accent,
   },
   infoCards: {
     flexDirection: 'row',
@@ -343,12 +501,57 @@ const styles = StyleSheet.create({
   },
   optionsContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   optionsSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
+  },
+  installWalletCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  installWalletIcon: {
+    fontSize: 28,
+  },
+  installWalletInfo: {
+    flex: 1,
+  },
+  installWalletTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#C2410C',
+  },
+  installWalletSubtitle: {
+    fontSize: 12,
+    color: '#EA580C',
+    marginTop: 2,
+  },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    lineHeight: 18,
   },
   walletOption: {
     flexDirection: 'row',
@@ -364,6 +567,16 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  walletOptionDisabled: {
+    opacity: 0.5,
+  },
+  demoOption: {
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderStyle: 'dashed',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   walletIcon: {
     width: 48,
     height: 48,
@@ -374,11 +587,34 @@ const styles = StyleSheet.create({
   walletEmoji: {
     fontSize: 24,
   },
-  walletName: {
+  walletInfo: {
     flex: 1,
+  },
+  walletName: {
     fontSize: 16,
     fontWeight: '700' as const,
     color: Colors.textPrimary,
+  },
+  walletSubtitle: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.cardBorder,
+  },
+  dividerText: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    fontWeight: '500' as const,
   },
   securityNote: {
     flexDirection: 'row',

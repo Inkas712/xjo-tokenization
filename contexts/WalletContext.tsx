@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { mixpanel } from '@/services/mixpanel';
 import createContextHook from '@nkzw/create-context-hook';
@@ -8,9 +9,20 @@ import { Currency, Language, exchangeRates, currencySymbols } from '@/mocks/prem
 import { getEthBalance, getEthPrice, testAlchemyConnection, AlchemyConnectionTest } from '@/services/alchemy';
 import { testSupabaseConnection, SupabaseConnectionTest } from '@/services/supabase';
 import { testPinataConnection, PinataConnectionTest } from '@/services/pinata';
+import {
+  connectBrowserWallet,
+  disconnectBrowserWallet,
+  getBalance,
+  isWalletAvailable,
+  getDetectedWalletName,
+  onAccountsChanged,
+  onChainChanged,
+  switchToPolygonAmoy,
+  isOnWeb,
+} from '@/services/web3-wallet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type WalletType = 'MetaMask' | 'WalletConnect' | 'Coinbase Wallet';
+export type WalletType = 'MetaMask' | 'WalletConnect' | 'Coinbase Wallet' | 'Browser Wallet';
 
 const WALLETCONNECT_PROJECT_ID = process.env.EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
 
@@ -46,6 +58,11 @@ interface WalletState {
   balance: string;
   connectWallet: (type: WalletType) => void;
   disconnectWallet: () => void;
+  isConnecting: boolean;
+  connectionError: string | null;
+  hasInjectedWallet: boolean;
+  detectedWalletName: string | null;
+  chainId: number | null;
   notifications: Notification[];
   unreadCount: number;
   markAllRead: () => void;
@@ -94,6 +111,9 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
   const [walletType, setWalletType] = useState<WalletType | null>(null);
   const [fullAddress, setFullAddress] = useState<string>('');
   const [balance, setBalance] = useState<string>('0');
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [chainId, setChainId] = useState<number | null>(null);
   const [notifs, setNotifs] = useState<Notification[]>(mockNotifications);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -107,13 +127,18 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
   const [language, setLanguage] = useState<Language>('en');
   const [isPro, setIsPro] = useState<boolean>(false);
 
+  const cleanupRef = useRef<(() => void)[]>([]);
+
+  const hasInjectedWallet = useMemo(() => isOnWeb() && isWalletAvailable(), []);
+  const detectedWalletName = useMemo(() => isOnWeb() ? getDetectedWalletName() : null, []);
+
   const ethPriceQuery = useQuery({
     queryKey: ['ethPrice'],
     queryFn: getEthPrice,
     staleTime: 120000,
   });
 
-  const ethUsdPrice = ethPriceQuery.data ?? 3200;
+  const ethUsdPrice = ethPriceQuery.data ?? 0.85;
 
   const [connectionStatus, setConnectionStatus] = useState<{
     alchemy: AlchemyConnectionTest | null;
@@ -195,7 +220,7 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
     loadPersistedState();
   }, []);
 
-  const persistState = useCallback(async (state: Record<string, any>) => {
+  const persistState = useCallback(async (state: Record<string, unknown>) => {
     try {
       const existing = await AsyncStorage.getItem('wallet_state');
       const current = existing ? JSON.parse(existing) : {};
@@ -203,6 +228,81 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
     } catch (err) {
       console.error('[Wallet] Failed to persist state:', err);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isOnWeb() || !isWalletAvailable()) return;
+
+    const unsubAccounts = onAccountsChanged((accounts) => {
+      console.log('[Wallet] Accounts changed:', accounts);
+      if (accounts.length === 0) {
+        setIsConnected(false);
+        setWalletType(null);
+        setFullAddress('');
+        setBalance('0');
+        setChainId(null);
+        Sentry.setUser(null);
+        console.log('[Wallet] Wallet disconnected via provider event');
+      } else if (accounts[0] && accounts[0] !== fullAddress) {
+        const newAddr = accounts[0];
+        setFullAddress(newAddr);
+        Sentry.setUser({ id: newAddr });
+        mixpanel.identify(newAddr);
+        console.log('[Wallet] Account switched to:', newAddr);
+        getBalance(newAddr).then(result => {
+          setBalance(result.balanceFormatted);
+        });
+      }
+    });
+
+    const unsubChain = onChainChanged((newChainId) => {
+      console.log('[Wallet] Chain changed:', newChainId);
+      setChainId(newChainId);
+      if (fullAddress) {
+        getBalance(fullAddress).then(result => {
+          setBalance(result.balanceFormatted);
+        });
+      }
+    });
+
+    cleanupRef.current = [unsubAccounts, unsubChain];
+
+    return () => {
+      cleanupRef.current.forEach(fn => fn());
+      cleanupRef.current = [];
+    };
+  }, [fullAddress]);
+
+  useEffect(() => {
+    if (!isOnWeb() || !isWalletAvailable()) return;
+
+    const checkExistingConnection = async () => {
+      try {
+        if (typeof window !== 'undefined' && window.ethereum) {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
+          if (accounts && accounts.length > 0) {
+            const addr = accounts[0];
+            console.log('[Wallet] Found existing connection:', addr);
+            setFullAddress(addr);
+            setIsConnected(true);
+            setWalletType(getDetectedWalletName() as WalletType ?? 'Browser Wallet');
+
+            const chainHex = await window.ethereum.request({ method: 'eth_chainId' }) as string;
+            setChainId(parseInt(chainHex, 16));
+
+            Sentry.setUser({ id: addr });
+            mixpanel.identify(addr);
+
+            const result = await getBalance(addr);
+            setBalance(result.balanceFormatted);
+          }
+        }
+      } catch (err) {
+        console.log('[Wallet] No existing connection found:', err);
+      }
+    };
+
+    checkExistingConnection();
   }, []);
 
   const address = useMemo(() => {
@@ -215,47 +315,103 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
 
   const connectWallet = useCallback(async (type: WalletType) => {
     console.log(`[Wallet] Connecting with ${type}...`);
-    console.log(`[Wallet] WalletConnect Project ID: ${WALLETCONNECT_PROJECT_ID ? 'configured' : 'not set'}`);
+    setConnectionError(null);
+    setIsConnecting(true);
 
-    setIsConnected(true);
-    setWalletType(type);
+    try {
+      if (isOnWeb() && isWalletAvailable()) {
+        console.log('[Wallet] Using real browser wallet connection');
 
-    const mockAddress = '0x7a3B4c2D8E1f6A9b5C3d7E2F8a4B6c1D9e5F2E';
-    setFullAddress(mockAddress);
+        const result = await connectBrowserWallet();
+        const addr = result.address;
 
-    Sentry.setUser({ id: mockAddress });
-    Sentry.addBreadcrumb({
-      category: 'wallet',
-      message: 'wallet_connected',
-      data: { walletType: type, address: mockAddress },
-      level: 'info',
-    });
+        setIsConnected(true);
+        setWalletType(type);
+        setFullAddress(addr);
+        setChainId(result.chainId);
 
-    mixpanel.identify(mockAddress);
-    mixpanel.setProfile({
-      wallet_address: mockAddress,
-      platform: 'mobile',
-      wallet_type: type,
-    });
-    mixpanel.trackWalletConnected(mockAddress);
+        Sentry.setUser({ id: addr });
+        Sentry.addBreadcrumb({
+          category: 'wallet',
+          message: 'wallet_connected',
+          data: { walletType: type, address: addr, chainId: result.chainId },
+          level: 'info',
+        });
 
-    const balanceResult = await getEthBalance(mockAddress);
-    if (balanceResult) {
-      setBalance(balanceResult.balanceEth.toString());
-      console.log(`[Wallet] Balance fetched: ${balanceResult.balanceEth} ETH`);
-    } else {
-      setBalance('24.58');
-      console.log('[Wallet] Using fallback balance');
+        mixpanel.identify(addr);
+        mixpanel.setProfile({
+          wallet_address: addr,
+          platform: 'web',
+          wallet_type: type,
+        });
+        mixpanel.trackWalletConnected(addr);
+
+        const balanceResult = await getBalance(addr);
+        setBalance(balanceResult.balanceFormatted);
+        console.log(`[Wallet] Real balance: ${balanceResult.balanceFormatted} MATIC`);
+
+        if (result.chainId !== 80002 && result.chainId !== 137) {
+          console.log('[Wallet] Not on Polygon, attempting switch...');
+          try {
+            await switchToPolygonAmoy();
+          } catch (switchErr) {
+            console.warn('[Wallet] Could not auto-switch network:', switchErr);
+          }
+        }
+      } else {
+        console.log('[Wallet] No browser wallet available, using demo mode');
+        const mockAddress = '0x7a3B4c2D8E1f6A9b5C3d7E2F8a4B6c1D9e5F2E';
+        setIsConnected(true);
+        setWalletType(type);
+        setFullAddress(mockAddress);
+
+        Sentry.setUser({ id: mockAddress });
+        Sentry.addBreadcrumb({
+          category: 'wallet',
+          message: 'wallet_connected_demo',
+          data: { walletType: type, address: mockAddress },
+          level: 'info',
+        });
+
+        mixpanel.identify(mockAddress);
+        mixpanel.setProfile({
+          wallet_address: mockAddress,
+          platform: Platform.OS,
+          wallet_type: type,
+        });
+        mixpanel.trackWalletConnected(mockAddress);
+
+        const balanceResult = await getEthBalance(mockAddress);
+        if (balanceResult) {
+          setBalance(balanceResult.balanceEth.toString());
+        } else {
+          setBalance('0.0000');
+        }
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Connection failed';
+      console.error('[Wallet] Connection error:', message);
+      setConnectionError(message);
+      Sentry.captureException(err, { tags: { action: 'wallet_connect', walletType: type } });
+    } finally {
+      setIsConnecting(false);
     }
   }, []);
 
-  const disconnectWallet = useCallback(() => {
+  const disconnectWallet = useCallback(async () => {
     console.log('[Wallet] Disconnecting...');
     mixpanel.trackWalletDisconnected();
+
+    if (isOnWeb()) {
+      await disconnectBrowserWallet();
+    }
+
     setIsConnected(false);
     setWalletType(null);
     setFullAddress('');
     setBalance('0');
+    setChainId(null);
+    setConnectionError(null);
     Sentry.setUser(null);
   }, []);
 
@@ -344,6 +500,11 @@ export const [WalletProvider, useWallet] = createContextHook<WalletState>(() => 
     balance,
     connectWallet,
     disconnectWallet,
+    isConnecting,
+    connectionError,
+    hasInjectedWallet,
+    detectedWalletName,
+    chainId,
     notifications: notifs,
     unreadCount,
     markAllRead,
