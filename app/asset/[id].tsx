@@ -274,7 +274,7 @@ export default function AssetDetailScreen() {
         <View style={styles.imageContainer}>
           <Image source={{ uri: asset.image }} style={styles.image} contentFit="cover" />
           <View style={[styles.imageOverlay, { paddingTop: insets.top + 8 }]}>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()} testID="back-btn">
+            <TouchableOpacity style={styles.iconBtn} onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/'); } }} testID="back-btn">
               <ArrowLeft size={22} color={Colors.textPrimary} />
             </TouchableOpacity>
             <View style={styles.imageActions}>
@@ -378,20 +378,47 @@ export default function AssetDetailScreen() {
           <Text style={styles.sectionTitle}>Details</Text>
           <View style={styles.detailsCard}>
             {[
-              ['Token ID', `#${asset.tokenId}`],
-              ['Contract', `${ASSET_TOKEN_ADDRESS.slice(0, 8)}...${ASSET_TOKEN_ADDRESS.slice(-6)}`],
-              ['Blockchain', 'Polygon Amoy'],
-              ['Network', 'Chain ID: 80002'],
-              ['Token Standard', asset.tokenStandard],
-              ['Royalty', `${asset.royalty}%`],
-              ['Supply', asset.supply.toLocaleString()],
-            ].map(([label, value]) => (
+              ['Token ID', `#${asset.tokenId}`, asset.tokenId],
+              ['Contract', `${ASSET_TOKEN_ADDRESS.slice(0, 8)}...${ASSET_TOKEN_ADDRESS.slice(-6)}`, ASSET_TOKEN_ADDRESS],
+              ['Blockchain', 'Polygon Amoy', ''],
+              ['Network', 'Chain ID: 80002', ''],
+              ['Token Standard', asset.tokenStandard, ''],
+              ['Royalty', `${asset.royalty}%`, ''],
+              ['Supply', asset.supply.toLocaleString(), ''],
+            ].map(([label, value, copyValue]) => (
               <View key={label} style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{label}</Text>
-                <View style={styles.detailValueRow}>
+                <TouchableOpacity
+                  style={styles.detailValueRow}
+                  disabled={!copyValue}
+                  onPress={copyValue ? async () => {
+                    try {
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        if (navigator.clipboard && window.isSecureContext) {
+                          await navigator.clipboard.writeText(copyValue);
+                        } else {
+                          const textArea = document.createElement('textarea');
+                          textArea.value = copyValue;
+                          textArea.style.position = 'fixed';
+                          textArea.style.left = '-999999px';
+                          textArea.style.top = '-999999px';
+                          document.body.appendChild(textArea);
+                          textArea.focus();
+                          textArea.select();
+                          document.execCommand('copy');
+                          textArea.remove();
+                        }
+                      }
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      showToast(`${label} copied to clipboard`);
+                    } catch (error) {
+                      console.error('Copy failed:', error);
+                    }
+                  } : undefined}
+                >
                   <Text style={styles.detailValue}>{value}</Text>
-                  {label === 'Contract' && <Copy size={12} color={Colors.textTertiary} />}
-                </View>
+                  {(label === 'Contract' || label === 'Token ID') && <Copy size={12} color={Colors.accent} />}
+                </TouchableOpacity>
               </View>
             ))}
           </View>
