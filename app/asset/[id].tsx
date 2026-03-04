@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -78,6 +79,7 @@ export default function AssetDetailScreen() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [alertBelow, setAlertBelow] = useState<string>('');
   const [alertAbove, setAlertAbove] = useState<string>('');
+
 
   const isFavorited = asset ? favorites.includes(asset.id) : false;
 
@@ -282,7 +284,31 @@ export default function AssetDetailScreen() {
               <TouchableOpacity style={styles.iconBtn} onPress={handleFavorite}>
                 <Heart size={20} color={isFavorited ? Colors.error : Colors.textPrimary} fill={isFavorited ? Colors.error : 'none'} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); showToast('Link copied to clipboard'); }}>
+              <TouchableOpacity style={styles.iconBtn} onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const link = `https://www.xjotoken.online/asset/${id}`;
+                try {
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    if (navigator.clipboard && window.isSecureContext) {
+                      await navigator.clipboard.writeText(link);
+                    } else {
+                      const textArea = document.createElement('textarea');
+                      textArea.value = link;
+                      textArea.style.position = 'fixed';
+                      textArea.style.left = '-999999px';
+                      textArea.style.top = '-999999px';
+                      document.body.appendChild(textArea);
+                      textArea.focus();
+                      textArea.select();
+                      document.execCommand('copy');
+                      textArea.remove();
+                    }
+                  }
+                  showToast('Link copied to clipboard');
+                } catch (error) {
+                  console.error('Copy failed:', error);
+                }
+              }}>
                 <Share2 size={20} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>

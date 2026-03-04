@@ -44,8 +44,28 @@ export default function ReferralScreen() {
     totalReferred <= 50 ? { name: 'Gold', rate: '1.0%', color: Colors.gold } :
     { name: 'Platinum', rate: '1.5%', color: '#E5E4E2' };
 
-  const handleCopy = () => {
-    showToast('Referral link copied to clipboard!');
+  const handleCopy = async () => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(referralLink);
+        } else {
+          const textArea = document.createElement('textarea');
+          textArea.value = referralLink;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          textArea.remove();
+        }
+      }
+      showToast('Referral link copied to clipboard!');
+    } catch (error) {
+      console.error('Copy failed:', error);
+    }
   };
 
   const handleShare = (platform: string) => {

@@ -58,11 +58,32 @@ export default function WalletModal() {
     testConnections();
   }, [testConnections]);
 
-  const handleCopyAddress = useCallback(() => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopyAddress = useCallback(async () => {
     if (!fullAddress) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(fullAddress);
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(fullAddress);
+        } else {
+          const textArea = document.createElement('textarea');
+          textArea.value = fullAddress;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          textArea.remove();
+        }
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Copy failed:', error);
     }
   }, [fullAddress]);
 
@@ -134,7 +155,7 @@ export default function WalletModal() {
 
             <TouchableOpacity style={styles.addressBox} onPress={handleCopyAddress} activeOpacity={0.7}>
               <Text style={styles.addressText}>{address}</Text>
-              <Copy size={14} color={Colors.textTertiary} />
+              {copied ? <CheckCircle size={14} color="#22C55E" /> : <Copy size={14} color={Colors.textTertiary} />}
             </TouchableOpacity>
 
             <View style={styles.balanceCard}>
