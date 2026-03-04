@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
-import { assets } from '@/mocks/assets';
+
 import { PriceChart } from '@/components/PriceChart';
 import { useAssetQuery, usePlaceBid, usePurchaseAsset, useListAsset } from '@/hooks/useAssets';
 import { AuctionTimer } from '@/components/AuctionTimer';
@@ -45,11 +45,9 @@ import { useWallet } from '@/contexts/WalletContext';
 import { mixpanel } from '@/services/mixpanel';
 import { ASSET_TOKEN_ADDRESS } from '@/constants/contracts';
 import {
-  generateComments,
-  generateResaleHistory,
-  generateFractionHolders,
-  sellerReviews,
   Comment,
+  ResaleEntry,
+  FractionHolder,
 } from '@/mocks/extended';
 import Svg, { Circle as SvgCircle, Text as SvgText } from 'react-native-svg';
 
@@ -65,7 +63,7 @@ export default function AssetDetailScreen() {
   const placeBidMutation = usePlaceBid();
   const purchaseMutation = usePurchaseAsset();
 
-  const asset = assetQuery.data ?? assets.find(a => a.id === id) ?? null;
+  const asset = assetQuery.data ?? null;
 
   const [showBuyModal, setShowBuyModal] = useState<boolean>(false);
   const [showBidModal, setShowBidModal] = useState<boolean>(false);
@@ -76,7 +74,7 @@ export default function AssetDetailScreen() {
   const [bidState, setBidState] = useState<'idle' | 'loading' | 'success'>('idle');
   const [activeTab, setActiveTab] = useState<DetailTab>('bids');
   const [newComment, setNewComment] = useState<string>('');
-  const [comments, setComments] = useState<Comment[]>(() => generateComments());
+  const [comments, setComments] = useState<Comment[]>([]);
   const [alertBelow, setAlertBelow] = useState<string>('');
   const [alertAbove, setAlertAbove] = useState<string>('');
 
@@ -94,8 +92,8 @@ export default function AssetDetailScreen() {
     return asset ? verifiedIds.includes(asset.id) : false;
   }, [asset]);
 
-  const resaleHistory = useMemo(() => asset ? generateResaleHistory(asset.price) : [], [asset]);
-  const fractionHolders = useMemo(() => generateFractionHolders(), []);
+  const resaleHistory = useMemo(() => [] as ResaleEntry[], [asset]);
+  const fractionHolders = useMemo(() => [] as FractionHolder[], []);
 
   const auctionEndTime = useMemo(() => {
     if (!asset || asset.saleType !== 'auction') return null;
@@ -679,25 +677,11 @@ export default function AssetDetailScreen() {
                   <Star key={s} size={16} color={Colors.gold} fill={s <= 4 ? Colors.gold : 'none'} />
                 ))}
               </View>
-              <Text style={styles.reviewCount}>{sellerReviews.length} reviews</Text>
+              <Text style={styles.reviewCount}>0 reviews</Text>
             </View>
-            {sellerReviews.map(review => (
-              <View key={review.id} style={styles.reviewItem}>
-                <View style={styles.reviewItemHeader}>
-                  <Image source={{ uri: review.user.avatar }} style={styles.reviewAvatar} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewName}>{review.user.name}</Text>
-                    <View style={styles.starsRow}>
-                      {[1, 2, 3, 4, 5].map(s => (
-                        <Star key={s} size={10} color={Colors.gold} fill={s <= review.rating ? Colors.gold : 'none'} />
-                      ))}
-                    </View>
-                  </View>
-                  <Text style={styles.reviewTime}>{review.timestamp}</Text>
-                </View>
-                <Text style={styles.reviewText}>{review.text}</Text>
-              </View>
-            ))}
+            <View style={{ alignItems: 'center' as const, paddingVertical: 20 }}>
+              <Text style={{ fontSize: 13, color: Colors.textTertiary }}>No reviews yet</Text>
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>

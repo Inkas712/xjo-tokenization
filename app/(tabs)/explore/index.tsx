@@ -15,7 +15,6 @@ import { Image } from 'expo-image';
 import { Search, SlidersHorizontal, ChevronDown, X, Layers, Users as UsersIcon } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { categories, AssetCategory, AssetStatus, Blockchain } from '@/mocks/assets';
-import { collections } from '@/mocks/extended';
 import { AssetCard } from '@/components/AssetCard';
 import { useAssetsQuery } from '@/hooks/useAssets';
 
@@ -70,9 +69,7 @@ export default function ExploreScreen() {
   }, [search, selectedCategory, selectedStatus, selectedChain, priceMin, priceMax, sort]);
 
   const filteredCollections = useMemo(() => {
-    if (!search.trim()) return collections;
-    const q = search.toLowerCase();
-    return collections.filter(c => c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q));
+    return [] as { id: string; name: string; cover: string; category: string; description: string; floorPrice: number; totalVolume: number; items: number; ownersCount: number }[];
   }, [search]);
 
   const activeFilterCount = useMemo(() => {

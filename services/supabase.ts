@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/react-native';
-import { Asset as AppAsset, AssetOwner, AssetCategory, SaleType, AssetStatus, Blockchain, ActivityEvent } from '@/mocks/assets';
-import { assets as mockAssets, stats as mockStats, owners as mockOwners } from '@/mocks/assets';
+import { Asset as AppAsset, AssetOwner, AssetCategory, SaleType, AssetStatus, Blockchain, ActivityEvent, defaultOwner } from '@/mocks/assets';
 
 export interface DbAsset {
   id: string;
@@ -287,8 +286,8 @@ function mapDbAssetToAsset(
   activities: DbActivity[],
   priceHistory: { month: string; price: number }[]
 ): AppAsset {
-  const ownerMapped: AssetOwner = owner ? mapDbUserToOwner(owner) : mockOwners[0];
-  const creatorMapped: AssetOwner = creator ? mapDbUserToOwner(creator) : mockOwners[0];
+  const ownerMapped: AssetOwner = owner ? mapDbUserToOwner(owner) : defaultOwner;
+  const creatorMapped: AssetOwner = creator ? mapDbUserToOwner(creator) : defaultOwner;
 
   return {
     id: dbAsset.id,
@@ -314,7 +313,7 @@ function mapDbAssetToAsset(
     priceHistory,
     bids: bids.map(b => ({
       id: b.id,
-      bidder: mockOwners.find(o => o.id === b.bidder_id) || mockOwners[0],
+      bidder: defaultOwner,
       amount: b.amount,
       amountUsd: b.amount_usd,
       timestamp: b.created_at,
@@ -332,8 +331,8 @@ function mapDbAssetToAsset(
 
 export async function fetchAssets(): Promise<AppAsset[]> {
   if (!isConfigured()) {
-    console.log('[Supabase] Not configured, returning mock assets');
-    return mockAssets;
+    console.log('[Supabase] Not configured, returning empty assets');
+    return [];
   }
 
   try {
@@ -344,8 +343,8 @@ export async function fetchAssets(): Promise<AppAsset[]> {
     );
 
     if (!data || data.length === 0) {
-      console.log('[Supabase] No assets found or query failed, returning mock data');
-      return mockAssets;
+      console.log('[Supabase] No assets found in database');
+      return [];
     }
 
     console.log(`[Supabase] Fetched ${data.length} assets`);
@@ -392,20 +391,18 @@ export async function fetchAssets(): Promise<AppAsset[]> {
     );
 
     const validAssets = assetsWithNulls.filter((a): a is AppAsset => a !== null);
-    return validAssets.length > 0 ? validAssets : mockAssets;
+    return validAssets;
   } catch (err) {
     console.error('[Supabase] Unexpected error fetching assets:', err);
     Sentry.captureException(err, { tags: { service: 'supabase', method: 'fetchAssets' } });
-    return mockAssets;
+    return [];
   }
 }
 
 export async function fetchAssetById(id: string): Promise<AppAsset | null> {
-  const mockFallback = mockAssets.find(a => a.id === id) || null;
-
   if (!isConfigured()) {
-    console.log(`[Supabase] Not configured, returning mock asset ${id}`);
-    return mockFallback;
+    console.log(`[Supabase] Not configured, no asset ${id}`);
+    return null;
   }
 
   try {
@@ -416,8 +413,8 @@ export async function fetchAssetById(id: string): Promise<AppAsset | null> {
     );
 
     if (!data) {
-      console.log(`[Supabase] Asset ${id} not found in DB, using mock`);
-      return mockFallback;
+      console.log(`[Supabase] Asset ${id} not found in DB`);
+      return null;
     }
 
     const dbAsset = data;
@@ -455,13 +452,15 @@ export async function fetchAssetById(id: string): Promise<AppAsset | null> {
   } catch (err) {
     console.error('[Supabase] Error fetching asset:', err);
     Sentry.captureException(err, { tags: { service: 'supabase', method: 'fetchAssetById' } });
-    return mockFallback;
+    return null;
   }
 }
 
-export async function fetchPlatformStats(): Promise<typeof mockStats> {
+const emptyStats = { totalVolume: 0, assetsListed: 0, activeUsers: 0 };
+
+export async function fetchPlatformStats(): Promise<typeof emptyStats> {
   if (!isConfigured()) {
-    return mockStats;
+    return emptyStats;
   }
 
   try {
@@ -472,18 +471,18 @@ export async function fetchPlatformStats(): Promise<typeof mockStats> {
     );
 
     if (!data) {
-      console.log('[Supabase] No stats in DB, returning mock');
-      return mockStats;
+      console.log('[Supabase] No stats in DB');
+      return emptyStats;
     }
 
     return {
-      totalVolume: data.total_volume ?? mockStats.totalVolume,
-      assetsListed: data.assets_listed ?? mockStats.assetsListed,
-      activeUsers: data.active_users ?? mockStats.activeUsers,
+      totalVolume: data.total_volume ?? 0,
+      assetsListed: data.assets_listed ?? 0,
+      activeUsers: data.active_users ?? 0,
     };
   } catch (err) {
     console.error('[Supabase] Error fetching stats:', err);
-    return mockStats;
+    return emptyStats;
   }
 }
 

@@ -5,8 +5,7 @@ import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { ArrowLeft, Search, Clock, X, Package, Users, Layers } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { assets as mockAssets, owners } from '@/mocks/assets';
-import { collections } from '@/mocks/extended';
+import { AssetOwner } from '@/mocks/assets';
 import { useAssetsQuery } from '@/hooks/useAssets';
 import { mixpanel } from '@/services/mixpanel';
 
@@ -20,7 +19,7 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>(['Penthouse', 'Gold', 'Art', 'Elena']);
 
   const assetsQuery = useAssetsQuery();
-  const allAssets = assetsQuery.data ?? mockAssets;
+  const allAssets = assetsQuery.data ?? [];
 
   const filteredAssets = useMemo(() => {
     if (!query.trim()) return [];
@@ -33,19 +32,23 @@ export default function SearchScreen() {
   }, [query, allAssets]);
 
   const filteredCollections = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return collections.filter(c => c.name.toLowerCase().includes(q));
+    return [] as { id: string; name: string; cover: string; items: number; floorPrice: number; category: string }[];
   }, [query]);
 
   const filteredUsers = useMemo(() => {
-    if (!query.trim()) return [];
+    if (!query.trim()) return [] as AssetOwner[];
     const q = query.toLowerCase();
-    return owners.filter(u =>
-      u.name.toLowerCase().includes(q) ||
-      u.wallet.toLowerCase().includes(q)
-    );
-  }, [query]);
+    const uniqueUsers = new Map<string, AssetOwner>();
+    allAssets.forEach(a => {
+      if (a.owner.name.toLowerCase().includes(q) || a.owner.wallet.toLowerCase().includes(q)) {
+        uniqueUsers.set(a.owner.id, a.owner);
+      }
+      if (a.creator.name.toLowerCase().includes(q) || a.creator.wallet.toLowerCase().includes(q)) {
+        uniqueUsers.set(a.creator.id, a.creator);
+      }
+    });
+    return Array.from(uniqueUsers.values());
+  }, [query, allAssets]);
 
   const handleSearch = useCallback((text: string) => {
     setQuery(text);

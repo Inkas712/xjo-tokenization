@@ -20,12 +20,10 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { assets } from '@/mocks/assets';
 import { useAssetsQuery } from '@/hooks/useAssets';
 import { PriceChart } from '@/components/PriceChart';
-import { portfolioValueHistory, royaltyData, royaltyMonthly } from '@/mocks/extended';
 import { riskFactors, riskRecommendations, riskScoreHistory } from '@/mocks/premium';
-import Svg, { Rect, Text as SvgText, Circle } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 
 type DashTab = 'overview' | 'royalties' | 'risk';
 
@@ -35,14 +33,14 @@ export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<DashTab>('overview');
 
   const assetsQuery = useAssetsQuery();
-  const allAssets = assetsQuery.data ?? assets;
-  const ownedAssets = useMemo(() => allAssets.filter(a => a.owner.id === 'u1'), [allAssets]);
+  const allAssets = assetsQuery.data ?? [];
+  const ownedAssets = useMemo(() => allAssets, [allAssets]);
   const totalValue = useMemo(() => ownedAssets.reduce((sum, a) => sum + a.priceUsd, 0), [ownedAssets]);
-  const totalRoyalties = useMemo(() => royaltyData.reduce((sum, r) => sum + r.amountReceived, 0), []);
+  const totalRoyalties = 0;
 
-  const portfolioChartData = useMemo(() =>
-    portfolioValueHistory.map(p => ({ month: p.month, price: p.value / 1000 })),
-  []);
+  const portfolioChartData = useMemo(() => {
+    return [] as { month: string; price: number }[];
+  }, []);
 
   const categoryBreakdown = useMemo(() => {
     const cats: Record<string, number> = {};
@@ -116,7 +114,7 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.statCard}>
                 <Percent size={18} color={Colors.warning} />
-                <Text style={styles.statValue}>{totalRoyalties.toFixed(2)}</Text>
+                <Text style={styles.statValue}>{totalRoyalties}</Text>
                 <Text style={styles.statLabel}>Royalties (ETH)</Text>
               </View>
             </View>
@@ -241,50 +239,14 @@ export default function DashboardScreen() {
             <View style={styles.royaltyHeader}>
               <View style={styles.royaltyTotal}>
                 <Text style={styles.royaltyTotalLabel}>Total Royalties Earned</Text>
-                <Text style={styles.royaltyTotalValue}>{totalRoyalties.toFixed(4)} ETH</Text>
-                <Text style={styles.royaltyTotalUsd}>${(totalRoyalties * 2450).toFixed(2)}</Text>
+                <Text style={styles.royaltyTotalValue}>0 ETH</Text>
+                <Text style={styles.royaltyTotalUsd}>$0.00</Text>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
               <View style={styles.chartCard}>
-                <Svg width={320} height={160}>
-                  {royaltyMonthly.map((m, i) => {
-                    const maxAmt = Math.max(...royaltyMonthly.map(r => r.amount));
-                    const barH = (m.amount / maxAmt) * 100;
-                    const x = 20 + i * 50;
-                    return (
-                      <React.Fragment key={m.month}>
-                        <Rect x={x} y={120 - barH} width={30} height={barH} rx={4} fill={Colors.accent} opacity={0.8} />
-                        <SvgText x={x + 15} y={145} textAnchor="middle" fontSize={10} fill={Colors.textTertiary}>{m.month}</SvgText>
-                        <SvgText x={x + 15} y={115 - barH} textAnchor="middle" fontSize={9} fill={Colors.accent}>{m.amount.toFixed(2)}</SvgText>
-                      </React.Fragment>
-                    );
-                  })}
-                </Svg>
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Royalty History</Text>
-              <View style={styles.tableCard}>
-                {royaltyData.map(r => (
-                  <View key={r.id} style={styles.royaltyRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.royaltyAsset}>{r.assetName}</Text>
-                      <Text style={styles.royaltyDate}>{r.saleDate}</Text>
-                    </View>
-                    <View style={{ alignItems: 'center' as const }}>
-                      <Text style={styles.royaltySale}>{r.salePrice} ETH</Text>
-                      <Text style={styles.royaltyPercent}>{r.royaltyPercent}%</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' as const, minWidth: 80 }}>
-                      <Text style={styles.royaltyEarned}>{r.amountReceived.toFixed(4)} ETH</Text>
-                      <Text style={styles.royaltyEarnedUsd}>${(r.amountReceived * 2450).toFixed(2)}</Text>
-                    </View>
-                  </View>
-                ))}
+                <Text style={{ fontSize: 14, color: Colors.textTertiary, textAlign: 'center' as const, paddingVertical: 40 }}>No royalty data yet</Text>
               </View>
             </View>
           </>

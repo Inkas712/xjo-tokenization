@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Crown, CreditCard, AlertTriangle, X, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWallet } from '@/contexts/WalletContext';
-import { paymentHistory } from '@/mocks/premium';
+
 
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
@@ -78,27 +78,9 @@ export default function BillingScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment History</Text>
           <View style={styles.historyCard}>
-            {(isPro ? paymentHistory : []).length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No payment history</Text>
-              </View>
-            ) : (
-              paymentHistory.map((p, i) => (
-                <View key={p.id} style={[styles.historyRow, i < paymentHistory.length - 1 && styles.historyBorder]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.historyDesc}>{p.description}</Text>
-                    <Text style={styles.historyDate}>{p.date}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' as const }}>
-                    <Text style={styles.historyAmount}>${p.amount}</Text>
-                    <View style={styles.paidBadge}>
-                      <Check size={10} color={Colors.accent} />
-                      <Text style={styles.paidText}>Paid</Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No payment history</Text>
+            </View>
           </View>
         </View>
 

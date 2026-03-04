@@ -12,13 +12,13 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Vote, Check, X, Clock, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWallet } from '@/contexts/WalletContext';
-import { proposals as initProposals, pastProposals, Proposal } from '@/mocks/premium';
+import { Proposal } from '@/mocks/premium';
 
 export default function GovernanceScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showToast } = useWallet();
-  const [activeProposals, setActiveProposals] = useState<Proposal[]>(initProposals);
+  const [activeProposals, setActiveProposals] = useState<Proposal[]>([]);
   const [showVoteModal, setShowVoteModal] = useState<boolean>(false);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [selectedVote, setSelectedVote] = useState<'for' | 'against' | 'abstain' | null>(null);
@@ -143,7 +143,11 @@ export default function GovernanceScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Past Proposals</Text>
-          {pastProposals.map(p => renderProposalCard(p, false))}
+          {activeProposals.length === 0 && (
+            <View style={{ alignItems: 'center' as const, paddingVertical: 30 }}>
+              <Text style={{ fontSize: 14, color: Colors.textTertiary }}>No proposals yet</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 

@@ -40,27 +40,12 @@ import { useAssetsQuery } from '@/hooks/useAssets';
 
 type ProfileTab = 'owned' | 'created' | 'favorited' | 'activity';
 
-const mockUser = {
-  name: 'Elena Voss',
-  username: '@elenav',
-  avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop',
-  wallet: '0x7a3B4c5D6e7F8901aBcDeF1234567890abcdef12',
-  followers: 234,
-  following: 56,
-};
 
-const mockActivity = [
-  { id: 'pa1', type: 'Sold', asset: 'Digital Aurora #7', price: '3.2 ETH', time: '2 hours ago' },
-  { id: 'pa2', type: 'Listed', asset: 'Skyline Penthouse #42', price: '12.5 ETH', time: '1 day ago' },
-  { id: 'pa3', type: 'Minted', asset: 'Neo-Tokyo Drift #33', price: '—', time: '3 days ago' },
-  { id: 'pa4', type: 'Purchased', asset: 'Gold Bar 1kg', price: '2.1 ETH', time: '1 week ago' },
-  { id: 'pa5', type: 'Bid Placed', asset: 'Vintage Rolex Daytona', price: '42.0 ETH', time: '2 weeks ago' },
-];
 
 export default function PortfolioScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { favorites, showToast, kycStatus, balance, fullAddress } = useWallet();
+  const { favorites, showToast, kycStatus, balance, fullAddress, address, isConnected } = useWallet();
   const assetsQuery = useAssetsQuery();
   const allAssets = assetsQuery.data ?? [];
   const [activeTab, setActiveTab] = useState<ProfileTab>('owned');
@@ -75,8 +60,22 @@ export default function PortfolioScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkPrice, setBulkPrice] = useState<string>('');
 
-  const ownedAssets = useMemo(() => allAssets.filter(a => a.owner.id === 'u1'), [allAssets]);
-  const createdAssets = useMemo(() => allAssets.filter(a => a.creator.id === 'u1'), [allAssets]);
+  const ownedAssets = useMemo(() => {
+    if (!fullAddress) return [];
+    const addr = fullAddress.toLowerCase();
+    return allAssets.filter(a =>
+      a.owner.wallet.toLowerCase() === addr ||
+      a.owner.id === fullAddress
+    );
+  }, [allAssets, fullAddress]);
+  const createdAssets = useMemo(() => {
+    if (!fullAddress) return [];
+    const addr = fullAddress.toLowerCase();
+    return allAssets.filter(a =>
+      a.creator.wallet.toLowerCase() === addr ||
+      a.creator.id === fullAddress
+    );
+  }, [allAssets, fullAddress]);
   const favoritedAssets = useMemo(() => allAssets.filter(a => favorites.includes(a.id)), [favorites, allAssets]);
 
   const handleListForSale = useCallback((asset: Asset) => {
@@ -166,7 +165,7 @@ export default function PortfolioScreen() {
     { key: 'owned', label: 'Owned', count: ownedAssets.length },
     { key: 'created', label: 'Created', count: createdAssets.length },
     { key: 'favorited', label: 'Favorited', count: favoritedAssets.length },
-    { key: 'activity', label: 'Activity', count: mockActivity.length },
+    { key: 'activity', label: 'Activity', count: 0 },
   ];
 
   const renderHeader = useCallback(() => (
@@ -188,22 +187,27 @@ export default function PortfolioScreen() {
       )}
 
       <View style={styles.profileCard}>
-        <Image source={{ uri: mockUser.avatar }} style={styles.avatar} />
-        <Text style={styles.userName}>{mockUser.name}</Text>
-        <Text style={styles.userHandle}>{mockUser.username}</Text>
-        <TouchableOpacity
-          style={styles.walletRow}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            showToast('Wallet address copied');
-          }}
-        >
-          <Text style={styles.walletAddress}>{mockUser.wallet.slice(0, 6)}...{mockUser.wallet.slice(-4)}</Text>
-          <Copy size={14} color={Colors.textTertiary} />
-        </TouchableOpacity>
+        <View style={[styles.avatar, { backgroundColor: Colors.primaryLight, alignItems: 'center' as const, justifyContent: 'center' as const }]}>
+          <Wallet size={32} color={Colors.accent} />
+        </View>
+        <Text style={styles.userName}>{isConnected ? address : 'Not Connected'}</Text>
+        {isConnected && fullAddress ? (
+          <TouchableOpacity
+            style={styles.walletRow}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              showToast('Wallet address copied');
+            }}
+          >
+            <Text style={styles.walletAddress}>{fullAddress.slice(0, 6)}...{fullAddress.slice(-4)}</Text>
+            <Copy size={14} color={Colors.textTertiary} />
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.userHandle}>Connect your wallet to view portfolio</Text>
+        )}
         <View style={styles.balanceRow}>
           <Wallet size={16} color={Colors.accent} />
-          <Text style={styles.balanceText}>{balance || '24.58'} ETH</Text>
+          <Text style={styles.balanceText}>{balance || '0'} ETH</Text>
         </View>
       </View>
 
@@ -219,13 +223,8 @@ export default function PortfolioScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{mockUser.followers}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{mockUser.following}</Text>
-          <Text style={styles.statLabel}>Following</Text>
+          <Text style={styles.statValue}>{favoritedAssets.length}</Text>
+          <Text style={styles.statLabel}>Favorited</Text>
         </View>
       </View>
 
@@ -264,13 +263,13 @@ export default function PortfolioScreen() {
         </View>
       )}
     </View>
-  ), [insets.top, activeTab, ownedAssets.length, createdAssets.length, favoritedAssets.length, router, tabs, bulkMode, selectedIds, kycStatus, showToast]);
+  ), [insets.top, activeTab, ownedAssets.length, createdAssets.length, favoritedAssets.length, router, tabs, bulkMode, selectedIds, kycStatus, showToast, isConnected, address, fullAddress, balance]);
 
   if (activeTab === 'activity') {
     return (
       <View style={styles.container}>
         <FlatList
-          data={mockActivity}
+          data={[] as { id: string; type: string; asset: string; price: string; time: string }[]}
           ListHeaderComponent={renderHeader}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
@@ -288,6 +287,11 @@ export default function PortfolioScreen() {
           )}
           contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 16 }}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No activity yet</Text>
+            </View>
+          }
         />
       </View>
     );

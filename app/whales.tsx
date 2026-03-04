@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Copy, RefreshCw, TrendingUp, Activity, Zap } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWallet } from '@/contexts/WalletContext';
-import { whaleData, whaleActivityFeed } from '@/mocks/premium';
+import { WhaleEntry } from '@/mocks/premium';
 
 type TimeFilter = '1H' | '24H' | '7D' | '30D';
 
@@ -22,26 +22,20 @@ export default function WhalesScreen() {
   const { showToast, isPro } = useWallet();
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('24H');
   const [lastUpdated, setLastUpdated] = useState<number>(30);
-  const [activityFeed, setActivityFeed] = useState(whaleActivityFeed);
+  const [activityFeed] = useState<{ id: string; wallet: string; action: string; asset: string; amount: number; time: string }[]>([]);
+  const whaleData: WhaleEntry[] = [];
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setLastUpdated(prev => {
-        if (prev <= 0) {
-          const shuffled = [...whaleActivityFeed].sort(() => Math.random() - 0.5);
-          setActivityFeed(shuffled);
-          return 30;
-        }
-        return prev - 1;
-      });
+      setLastUpdated(prev => prev <= 0 ? 30 : prev - 1);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   const stats = useMemo(() => ({
-    volume24h: whaleData.reduce((s, w) => s + w.totalVolume * 0.05, 0),
-    largestTrade: 95.0,
-    mostActive: whaleData[0].wallet,
+    volume24h: 0,
+    largestTrade: 0,
+    mostActive: 'N/A',
   }), []);
 
   const handleCopy = useCallback((wallet: string) => {

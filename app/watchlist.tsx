@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Bookmark, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
-import { assets as mockAssets } from '@/mocks/assets';
+
 import { AssetCard } from '@/components/AssetCard';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAssetsQuery } from '@/hooks/useAssets';
@@ -20,7 +20,7 @@ export default function WatchlistScreen() {
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
 
   const assetsQuery = useAssetsQuery();
-  const allAssets = assetsQuery.data ?? mockAssets;
+  const allAssets = assetsQuery.data ?? [];
 
   const watchlistAssets = useMemo(() => {
     let filtered = allAssets.filter(a => watchlist.includes(a.id));

@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Download, FileText, AlertTriangle, ChevronDown } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWallet } from '@/contexts/WalletContext';
-import { taxRecords } from '@/mocks/premium';
+import { TaxRecord } from '@/mocks/premium';
 
 type Year = '2025' | '2026';
 
@@ -21,8 +21,9 @@ export default function TaxScreen() {
   const { showToast, isPro } = useWallet();
   const [selectedYear, setSelectedYear] = useState<Year>('2026');
 
+  const taxRecords: TaxRecord[] = [];
   const records = useMemo(() =>
-    taxRecords.filter(r => r.sellDate.startsWith(selectedYear)),
+    taxRecords.filter((r: TaxRecord) => r.sellDate.startsWith(selectedYear)),
   [selectedYear]);
 
   const totalGains = useMemo(() => records.filter(r => r.gainLoss > 0).reduce((s, r) => s + r.gainLoss, 0), [records]);
@@ -35,7 +36,7 @@ export default function TaxScreen() {
   const longTermGains = useMemo(() => records.filter(r => r.type === 'long' && r.gainLoss > 0).reduce((s, r) => s + r.gainLoss, 0), [records]);
   const totalPositiveGains = shortTermGains + longTermGains;
 
-  const unrealizedLosses = 2.4;
+  const unrealizedLosses = 0;
 
   return (
     <View style={styles.container}>

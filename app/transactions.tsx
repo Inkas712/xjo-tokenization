@@ -5,8 +5,10 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Download, ChevronLeft, ChevronRight, Sparkles, ShoppingCart, Tag, Gavel, ArrowRightLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
-import { transactions, TransactionRecord } from '@/mocks/extended';
+import { TransactionRecord } from '@/mocks/extended';
 import { useWallet } from '@/contexts/WalletContext';
+import { fetchTransactions as fetchTransactionsFromDb } from '@/services/supabase';
+import { useQuery } from '@tanstack/react-query';
 
 type TxFilter = 'All' | 'Mint' | 'Buy' | 'Sell' | 'Bid' | 'Transfer';
 
@@ -15,14 +17,36 @@ const PAGE_SIZE = 10;
 export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { showToast } = useWallet();
+  const { showToast, fullAddress } = useWallet();
   const [filter, setFilter] = useState<TxFilter>('All');
   const [page, setPage] = useState<number>(0);
 
+  const txQuery = useQuery({
+    queryKey: ['transactions', fullAddress],
+    queryFn: () => fetchTransactionsFromDb(fullAddress || ''),
+    enabled: !!fullAddress,
+    staleTime: 30000,
+  });
+
+  const realTransactions: TransactionRecord[] = useMemo(() => {
+    if (!txQuery.data) return [];
+    return txQuery.data.map(tx => ({
+      id: tx.id,
+      type: (tx.type || 'Transfer') as TransactionRecord['type'],
+      asset: tx.asset_id,
+      assetId: tx.asset_id,
+      from: tx.from_address.length > 10 ? `${tx.from_address.slice(0, 6)}...${tx.from_address.slice(-4)}` : tx.from_address,
+      to: tx.to_address.length > 10 ? `${tx.to_address.slice(0, 6)}...${tx.to_address.slice(-4)}` : tx.to_address,
+      price: tx.price,
+      date: tx.created_at?.split('T')[0] || '',
+      status: (tx.status === 'completed' ? 'Confirmed' : tx.status === 'failed' ? 'Failed' : 'Pending') as TransactionRecord['status'],
+    }));
+  }, [txQuery.data]);
+
   const filtered = useMemo(() => {
-    if (filter === 'All') return transactions;
-    return transactions.filter(t => t.type === filter);
-  }, [filter]);
+    if (filter === 'All') return realTransactions;
+    return realTransactions.filter(t => t.type === filter);
+  }, [filter, realTransactions]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);

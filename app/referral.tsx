@@ -23,7 +23,7 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWallet } from '@/contexts/WalletContext';
-import { referrals, referralEarningsMonthly } from '@/mocks/premium';
+import { Referral } from '@/mocks/premium';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 
 export default function ReferralScreen() {
@@ -32,9 +32,11 @@ export default function ReferralScreen() {
   const { showToast } = useWallet();
   const [showWithdraw, setShowWithdraw] = useState<boolean>(false);
 
-  const referralLink = 'https://xjo.io/ref/7a3B9f2E';
-  const totalEarned = referrals.reduce((s, r) => s + r.earnings, 0);
-  const activeCount = referrals.filter(r => r.status === 'active').length;
+  const referrals: Referral[] = [];
+  const referralEarningsMonthly: { month: string; amount: number }[] = [];
+  const referralLink = 'https://xjo.io/ref/yourcode';
+  const totalEarned = referrals.reduce((s: number, r: Referral) => s + r.earnings, 0);
+  const activeCount = referrals.filter((r: Referral) => r.status === 'active').length;
   const totalReferred = referrals.length;
 
   const tierInfo = totalReferred <= 5 ? { name: 'Bronze', rate: '0.5%', color: Colors.bronze } :

@@ -3,9 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, BadgeCheck, Trophy } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Trophy, Users } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { leaderboardSellers, leaderboardBuyers, leaderboardCreators, LeaderboardUser } from '@/mocks/extended';
 
 type LeaderTab = 'sellers' | 'buyers' | 'creators';
 type TimePeriod = 'week' | 'month' | 'all';
@@ -17,10 +16,7 @@ export default function LeaderboardScreen() {
   const [period, setPeriod] = useState<TimePeriod>('month');
 
   const data = useMemo(() => {
-    const base = activeTab === 'sellers' ? leaderboardSellers : activeTab === 'buyers' ? leaderboardBuyers : leaderboardCreators;
-    if (period === 'week') return base.map(u => ({ ...u, volume: u.volume * 0.3, transactions: Math.round(u.transactions * 0.3) }));
-    if (period === 'all') return base.map(u => ({ ...u, volume: u.volume * 3.2, transactions: Math.round(u.transactions * 3.2) }));
-    return base;
+    return [] as { id: string; name: string; avatar: string; volume: number; transactions: number; verified: boolean }[];
   }, [activeTab, period]);
 
   const getMedalColor = (rank: number) => {
@@ -73,54 +69,34 @@ export default function LeaderboardScreen() {
           ))}
         </View>
 
-        {data.length > 2 && (
-          <View style={styles.podium}>
-            <View style={styles.podiumItem}>
-              <Image source={{ uri: data[1].avatar }} style={styles.podiumAvatar2} />
-              <View style={[styles.medalBadge, { backgroundColor: Colors.silver }]}>
-                <Text style={styles.medalText}>2</Text>
-              </View>
-              <Text style={styles.podiumName} numberOfLines={1}>{data[1].name.split(' ')[0]}</Text>
-              <Text style={styles.podiumVol}>{data[1].volume.toFixed(1)} ETH</Text>
-            </View>
-            <View style={[styles.podiumItem, styles.podiumFirst]}>
-              <Trophy size={20} color={Colors.gold} style={{ marginBottom: 4 }} />
-              <Image source={{ uri: data[0].avatar }} style={styles.podiumAvatar1} />
-              <View style={[styles.medalBadge, { backgroundColor: Colors.gold }]}>
-                <Text style={styles.medalText}>1</Text>
-              </View>
-              <Text style={styles.podiumName} numberOfLines={1}>{data[0].name.split(' ')[0]}</Text>
-              <Text style={styles.podiumVol}>{data[0].volume.toFixed(1)} ETH</Text>
-            </View>
-            <View style={styles.podiumItem}>
-              <Image source={{ uri: data[2].avatar }} style={styles.podiumAvatar3} />
-              <View style={[styles.medalBadge, { backgroundColor: Colors.bronze }]}>
-                <Text style={styles.medalText}>3</Text>
-              </View>
-              <Text style={styles.podiumName} numberOfLines={1}>{data[2].name.split(' ')[0]}</Text>
-              <Text style={styles.podiumVol}>{data[2].volume.toFixed(1)} ETH</Text>
-            </View>
+        {data.length === 0 && (
+          <View style={{ alignItems: 'center', paddingVertical: 60, gap: 12 }}>
+            <Users size={48} color={Colors.textTertiary} />
+            <Text style={{ fontSize: 16, fontWeight: '700' as const, color: Colors.textPrimary }}>No leaderboard data yet</Text>
+            <Text style={{ fontSize: 13, color: Colors.textTertiary, textAlign: 'center' as const, paddingHorizontal: 40 }}>Leaderboard will populate as users trade on the platform</Text>
           </View>
         )}
 
-        <View style={styles.tableCard}>
-          {data.map((user, index) => (
-            <View key={user.id} style={styles.userRow}>
-              <View style={[styles.rankBadge, index < 3 && { backgroundColor: getMedalColor(index + 1) + '20' }]}>
-                <Text style={[styles.rankNum, index < 3 && { color: getMedalColor(index + 1), fontWeight: '800' as const }]}>{index + 1}</Text>
-              </View>
-              <Image source={{ uri: user.avatar }} style={styles.userAvatar} />
-              <View style={{ flex: 1 }}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.userName}>{user.name}</Text>
-                  {user.verified && <BadgeCheck size={14} color={Colors.verified} />}
+        {data.length > 0 && (
+          <View style={styles.tableCard}>
+            {data.map((user, index) => (
+              <View key={user.id} style={styles.userRow}>
+                <View style={[styles.rankBadge, index < 3 && { backgroundColor: getMedalColor(index + 1) + '20' }]}>
+                  <Text style={[styles.rankNum, index < 3 && { color: getMedalColor(index + 1), fontWeight: '800' as const }]}>{index + 1}</Text>
                 </View>
-                <Text style={styles.userTx}>{user.transactions} transactions</Text>
+                <Image source={{ uri: user.avatar }} style={styles.userAvatar} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.userName}>{user.name}</Text>
+                    {user.verified && <BadgeCheck size={14} color={Colors.verified} />}
+                  </View>
+                  <Text style={styles.userTx}>{user.transactions} transactions</Text>
+                </View>
+                <Text style={styles.userVolume}>{user.volume.toFixed(1)} ETH</Text>
               </View>
-              <Text style={styles.userVolume}>{user.volume.toFixed(1)} ETH</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );

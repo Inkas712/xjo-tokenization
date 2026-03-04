@@ -19,8 +19,6 @@ import Colors from '@/constants/colors';
 import {
   analyticsVolumeByMonth,
   analyticsVolumeByCategory,
-  topAssetsByVolume,
-  recentSalesTicker,
 } from '@/mocks/extended';
 
 type TrendPeriod = '24h' | '7d' | '30d';
@@ -44,8 +42,11 @@ export default function AnalyticsScreen() {
     return () => tickerAnim.stopAnimation();
   }, [tickerAnim]);
 
-  const maxVol = Math.max(...analyticsVolumeByMonth.map(v => v.volume));
-  const maxCatVol = Math.max(...analyticsVolumeByCategory.map(v => v.volume));
+  const recentSalesTicker: { asset: string; price: string; time: string }[] = [];
+  const topAssetsByVolume: { rank: number; name: string; volume: number; change: number }[] = [];
+
+  const maxVol = Math.max(...analyticsVolumeByMonth.map(v => v.volume), 1);
+  const maxCatVol = Math.max(...analyticsVolumeByCategory.map(v => v.volume), 1);
 
   const volumePoints = analyticsVolumeByMonth.map((v, i) => ({
     x: 30 + (i / (analyticsVolumeByMonth.length - 1)) * 280,
