@@ -1,0 +1,22 @@
+version: 1.0.{build}
+
+image: Ubuntu
+
+build: off
+
+environment:
+  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+
+install:
+  - sh: curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+  - sh: sudo apt-get install -y nodejs
+  - sh: npm install
+
+build_script:
+  - sh: cd android
+  - sh: chmod +x gradlew
+  - sh: ./gradlew assembleRelease
+
+artifacts:
+  - path: android/app/build/outputs/apk/release/*.apk
+    name: APK
